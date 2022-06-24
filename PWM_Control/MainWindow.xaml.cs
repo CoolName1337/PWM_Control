@@ -27,20 +27,10 @@ namespace PWM_Control
             InitializeComponent();
             Start();
         }
-        private void Start() {
-            if (CheckArduino())
-            {
-                SetVisibleAll(Visibility.Visible, textBox, powerSwitch, slider);
-                SetVisibleAll(Visibility.Hidden, ErrorTextBlock, recheckButton);
-            }
-            else {
-                SetArduinoNotFound();
-            }
-        }
-        private void SetArduinoNotFound()
-        {
-            SetVisibleAll(Visibility.Hidden, slider, textBox, powerSwitch);
-            SetVisibleAll(Visibility.Visible, ErrorTextBlock, recheckButton);
+        private void Start() => SetWidgets(CheckArduino());
+        private void SetWidgets(bool ArduinoFinded) {
+            SetVisibleAll(ArduinoFinded ? Visibility.Visible : Visibility.Hidden, slider, textBox, powerSwitch);
+            SetVisibleAll(ArduinoFinded ? Visibility.Hidden : Visibility.Visible, ErrorTextBlock, recheckButton);
         }
         private void SetVisibleAll(Visibility visibility, params UIElement[] controls) {
             foreach (UIElement control in controls)
@@ -51,40 +41,38 @@ namespace PWM_Control
         {
             foreach (string port in SerialPort.GetPortNames()) {
                 serialPort = new SerialPort(port, 115200);
+                serialPort.ReadTimeout = 100;
                 serialPort.Open();
-                GetFromArduino("Arduino");
-                if (serialPort.ReadByte() == 1) {
-                    InitializeArduino();
-                    return true;
+                serialPort.Write($"[GET] Arduino\n");
+                try { 
+                    if (serialPort.ReadByte() == 1) {
+                        InitializeArduino();
+                        return true;
+                    }
                 }
+                catch(TimeoutException e){  }
                 serialPort.Close();
             }
             return false;
         }
-        private void GetFromArduino(string s) {
-            serialPort.Write($"[GET] {s}\n");
-        }
         private void InitializeArduino() {
 
-            GetFromArduino("PWM_k");
+            serialPort.Write($"[GET] PWM_k\n");
+            Thread.Sleep(10);
             slider.Value = (serialPort.ReadByte() - 255 * serialPort.ReadByte()) / 255d * 100;
 
-            GetFromArduino("isActivated");
+            serialPort.Write($"[GET] isActivated\n");
+            Thread.Sleep(10);
             powerSwitch.Content = serialPort.ReadByte() != 0 ? "OFF" : "ON";
         }
-        private void RecheckButton_Click(object sender, RoutedEventArgs e)
-        {
-            Start();
-        }
-        
+        private void RecheckButton_Click(object sender, RoutedEventArgs e) => Start();
         private void Button_Click(object sender, RoutedEventArgs e) {
             try { 
                 serialPort.Write("[SET] ON/OFF\n");
                 powerSwitch.Content = (string)powerSwitch.Content == "OFF" ? "ON" : "OFF";
             }
-            catch
-            { 
-                SetArduinoNotFound();
+            catch {
+                SetWidgets(false);
             }
         }
         private void TextBox_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -123,7 +111,7 @@ namespace PWM_Control
             }
             textBox.Text = $"{(int)e.NewValue}%";
             try { serialPort.Write($"{(int)(e.NewValue / 100d * 255)}\n"); }
-            catch{ SetArduinoNotFound(); }
+            catch { SetWidgets(false); }
            
         }
 
