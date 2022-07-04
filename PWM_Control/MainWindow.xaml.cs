@@ -20,7 +20,7 @@ namespace PWM_Control
 
     public partial class MainWindow : Window
     {
-        static SerialPort serialPort;
+        static SerialPort serialPort = new SerialPort() {BaudRate = 115200, ReadTimeout = 100 };
 
         public MainWindow()
         {
@@ -40,18 +40,19 @@ namespace PWM_Control
         private bool CheckArduino()
         {
             foreach (string port in SerialPort.GetPortNames()) {
-                serialPort = new SerialPort(port, 115200);
-                serialPort.ReadTimeout = 100;
-                serialPort.Open();
-                serialPort.Write($"[GET] Arduino\n");
-                try { 
-                    if (serialPort.ReadByte() == 1) {
+                serialPort.PortName = port;
+                try
+                {
+                    serialPort.Open();
+                    serialPort.Write($"[GET] Arduino\n");
+                    if (serialPort.ReadByte() == 1)
+                    {
                         InitializeArduino();
                         return true;
                     }
+                    serialPort.Close();
                 }
-                catch(TimeoutException e){  }
-                serialPort.Close();
+                catch { }
             }
             return false;
         }
